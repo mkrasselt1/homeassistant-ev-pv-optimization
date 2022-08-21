@@ -1,3 +1,57 @@
 shell_command:
   smartwb1_setcurrent: curl "http://192.168.30.40/setCurrent/?current={{ampere}}"  ##to set charging limit for my wb
   smartwb1_setstatus: curl "http://192.168.30.40/setStatus/?active={{status}}"   #to set charging mode for my wb
+
+sensor:
+  - platform: rest  ##to recieve data from my wallbox, alternative - mqtt
+    resource: http://192.168.30.40/getParameters
+    name: smartwb1
+    json_attributes:
+      - list
+    value_template: '{{ value_json.list[0].vehicleState }}'
+    scan_interval: 2  
+  - platform: template
+    sensors:
+      wb1_current:
+        friendly_name: 'WB1 Stromstärke'
+        unit_of_measurement: A
+        value_template: >
+          {{ state_attr('sensor.smartwb1', 'list')[0]['actualCurrent'] }}
+      wb1_status:
+        friendly_name: 'WB1 Fahrzeug Status'
+        value_template: >
+          {% set state_list = ["none", "bereit", "angeschlossen", "ladend"] %}
+          {{state_list[state_attr('sensor.smartwb1', 'list')[0]['vehicleState']]}}
+      wb1_power:
+        friendly_name: 'WB1 Ladeleistung'
+        unit_of_measurement: kW
+        value_template: >
+          {{ state_attr('sensor.smartwb1', 'list')[0]['actualPower'] }}
+      wb1_energy:
+        friendly_name: 'WB1 Energie geladen'
+        unit_of_measurement: kWh
+        value_template: >
+          {{ state_attr('sensor.smartwb1', 'list')[0]['energy'] }}
+      wb1_meter:
+        friendly_name: 'WB1 Stromzähler'
+        unit_of_measurement: kWh
+        value_template: >
+          {{ state_attr('sensor.smartwb1', 'list')[0]['meterReading'] }}
+      wb1_phases:
+        friendly_name: 'WB1 Phasen'
+        value_template: >
+          {% set phases = 0 -%}
+          {% if states.sensor.smartwb1.attributes.list[0].currentP1|float > 1 -%}
+            {% set phases = phases + 1 -%}
+          {% endif -%}
+          {% if states.sensor.smartwb1.attributes.list[0].currentP2|float > 1 -%}
+            {% set phases = phases + 1 -%}
+          {% endif -%}
+          {% if states.sensor.smartwb1.attributes.list[0].currentP3|float > 1 -%}
+            {% set phases = phases + 1 -%}
+          {% endif -%}
+          {{phases}}
+      wb1_current_measured:
+        friendly_name: 'WB1 Stromfluss'
+        value_template: >
+          {{states.sensor.smartwb1.attributes.list[0].currentP1|float+states.sensor.smartwb1.attributes.list[0].currentP2|float+states.sensor.smartwb1.attributes.list[0].currentP3|float}}
