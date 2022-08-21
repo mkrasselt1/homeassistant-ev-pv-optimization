@@ -1,0 +1,84 @@
+alias: Überschuss Strom Verteilung
+sequence:
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.smartwb1_current
+    data:
+      value: >
+        {% set ac_grid_volt = (
+        states.sensor.solaredge_m1_ac_voltage_ln.state|default("230", true)
+        )|float-%} {% set battery_power =
+        states.sensor.solaredge_battery1_power.state|round(0,'floor') -%} {% set
+        battery_current = (battery_power/(ac_grid_volt*1.4142))|round(0,'floor')
+        -%} {% set battery_drain = 0 -%} {% if battery_current < 0 -%}
+          {% set battery_drain = -battery_current -%}
+        {% endif -%} {% set ac_grid_current =
+        -(states.sensor.solaredge_m1_ac_current.state|float)|round(1,ceil) -%}
+        {% set excess_current = (ac_grid_current-battery_drain)-%} {% set
+        charging_current =
+        states.sensor.wb1_current_measured.state|round(2,'ceil')-%} {% set
+        controlled_current = states.sensor.wb1_current.state|int(0) -%} {% set
+        controlled_phases = states.sensor.wb1_phases.state|int(0) -%} {% if
+        (states.sensor.smartwb1.state|int(0) == 2) -%}
+          {% set controlled_phases = 1 -%}
+        {% endif -%} {% set controlled = 0 -%} {% if (controlled_phases) -%}
+          {% set excess_phase_adj = (excess_current/controlled_phases)| round(2,ceil) -%}
+          {% if (excess_phase_adj >=1 ) -%}
+            {% if (controlled_current==0) -%}
+              {% set controlled = [excess_phase_adj|round(0,'floor')|int(0),16]|min -%}
+            {% else -%}
+              {% set controlled = [(controlled_current+1)|round(0,'floor'),16]|min -%}
+            {% endif -%}
+          {% else -%}
+            {% if(controlled_current+excess_phase_adj)|round(0,'floor') >4 -%}
+              {% set controlled = [(controlled_current+excess_phase_adj)|round(0,'floor'),6]|max -%}
+            {% else -%}
+              {% set controlled = 0 -%}
+            {% endif -%}
+          {% endif -%}
+        {% endif -%} {{controlled}}
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: input_select.smartwb1_mode
+            state: Normal
+          - condition: template
+            value_template: >
+              {{ not ((states.input_number.evse_vorrang_stromstarke.state | int
+              ) ==
+
+              (states.sensor.wb1_current.state | int)) }}
+        sequence:
+          - service: shell_command.smartwb1_setcurrent
+            data_template:
+              ampere: >
+                {{ states.input_number.evse_vorrang_stromstarke.state  | int(0)
+                }}
+      - conditions:
+          - condition: state
+            entity_id: input_select.smartwb1_mode
+            state: Solar
+          - condition: template
+            value_template: |
+              {{ (not ((states.input_number.smartwb1_current.state | int(0) ) ==
+              (states.sensor.wb1_current.state | int(0))) and
+              (states.input_number.smartwb1_current.state | int(0)) > 5) }}
+        sequence:
+          - service: shell_command.smartwb1_setcurrent
+            data_template:
+              ampere: |
+                {{ states.input_number.smartwb1_current.state | int(0) }}
+      - conditions:
+          - condition: state
+            entity_id: input_select.smartwb1_mode
+            state: Deaktiviert
+          - condition: template
+            value_template: |
+              {{ not ((states.sensor.wb1_current.state | int(0)) == 0) }}
+        sequence:
+          - service: shell_command.smartwb1_setcurrent
+            data:
+              ampere: 0
+    default: []
+mode: single
+icon: mdi:axis-arrow
