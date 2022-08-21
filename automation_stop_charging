@@ -1,0 +1,22 @@
+alias: "Auto: Ladung stoppen"
+description: Wenn der Strom nichtmehr reicht, beende das laden
+trigger:
+  - platform: numeric_state
+    entity_id: input_number.smartwb1_current
+    for: "00:00:20"
+    below: "6"
+condition:
+  - condition: state
+    entity_id: input_select.smartwb1_mode
+    state: Solar
+  - condition: state
+    entity_id: sensor.smartwb1
+    state: "3"
+action:
+  - service: shell_command.smartwb1_setstatus
+    data:
+      status: "false"
+  - service: shell_command.smartwb1_setcurrent
+    data:
+      ampere: 0
+mode: single
