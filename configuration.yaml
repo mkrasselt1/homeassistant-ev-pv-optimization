@@ -1,0 +1,3 @@
+shell_command:
+  smartwb1_setcurrent: curl "http://192.168.30.40/setCurrent/?current={{ampere}}"  ##to set charging limit for my wb
+  smartwb1_setstatus: curl "http://192.168.30.40/setStatus/?active={{status}}"   #to set charging mode for my wb
